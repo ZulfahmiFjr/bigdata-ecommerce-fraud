@@ -87,7 +87,7 @@ def main():
         "- Terstruktur: Transaksi & nominal",
         "- Semi-Terstruktur: JSON clickstream",
         "- Tidak Terstruktur: Teks ulasan",
-        "- Skenario: Normal + 4 pola fraud",
+        "- Skenario: Normal + 3 pola fraud",
     ], f_card_body, (51, 65, 85), 10)
 
     draw_arrow(draw, 285, 425, 285, 472, (30, 58, 95), 4, 13)
@@ -97,7 +97,7 @@ def main():
     draw.text((102, 492), "Python Event Producer", font=f_card_title, fill=(30, 58, 95))
     draw_multiline(draw, 102, 528, [
         "- Replay dataset & stream real-time",
-        "- Injeksi burst, spike, geo, bot review",
+        "- Injeksi burst, spike, ulasan penipuan",
         "- Rate terkontrol (20-200 event/dtk)",
     ], f_card_body, (51, 65, 85), 8)
 
@@ -108,9 +108,9 @@ def main():
     draw.text((102, 694), "Apache Kafka (Mode KRaft)", font=f_card_title, fill=(30, 58, 95))
     draw_multiline(draw, 102, 732, [
         "- Tanpa Zookeeper (hemat RAM)",
-        "- Topik: ecommerce.transactions",
-        "- Topik: ecommerce.clickstream",
-        "- Topik: ecommerce.reviews",
+        "- 1 Topik Terpadu: ecommerce_events",
+        "- Muat 3 jenis data dalam 1 pesan",
+        "- Tanpa stream join yang boros RAM",
     ], f_card_body, (51, 65, 85), 8)
     draw_rounded_box(draw, (102, 862, 468, 900), 8, (219, 234, 254))
     draw_centered_text(draw, (102, 862, 468, 900), "mem_limit: 650m | Heap: 256-384m", f_badge, (30, 64, 175))
@@ -120,11 +120,11 @@ def main():
     draw.text((622, 244), "PySpark Structured Streaming", font=f_card_title, fill=(15, 118, 110))
     draw_multiline(draw, 622, 282, [
         "- Mode local[2] (2 vCPU, tanpa master)",
+        "- Skrip: stream_fraud_detector.py",
         "- Watermarking & 1-min windowing",
-        "- Deteksi 4 pola fraud & risk scoring",
+        "- Deteksi 3 pola fraud & risk scoring",
         "- Analisis kata kunci ulasan negatif",
         "- Hitung rasio klik vs checkout",
-        "- Generator aturan aksi preskriptif",
     ], f_card_body, (51, 65, 85), 10)
     draw_rounded_box(draw, (622, 488, 1028, 526), 8, (204, 251, 241))
     draw_centered_text(draw, (622, 488, 1028, 526), "mem_limit: 1200m | Driver: 768m", f_badge, (17, 94, 89))
@@ -135,7 +135,7 @@ def main():
     draw_multiline(draw, 622, 636, [
         "- spark.sql.shuffle.partitions = 4",
         "- partitionBy('event_date','category')",
-        "- Columnar Snappy Parquet",
+        "- Skrip: batch_benchmark.py",
         "- Caching/Persist agregasi berulang",
         "- Skrip benchmark performa:",
         "  Sebelum vs Sesudah Optimasi",
@@ -185,12 +185,12 @@ def main():
     draw_rounded_box(draw, (1700, 600, 2120, 920), 14, (255, 255, 255), (99, 102, 241), 2)
     draw.text((1722, 618), "Panel Aksi Preskriptif", font=f_card_title, fill=(67, 56, 202))
     draw_multiline(draw, 1722, 656, [
-        "- Risk >= 80 / Velocity Burst:",
+        "- Transaksi Kilat (>= 5/menit):",
         "  Blokir sementara + verifikasi OTP",
-        "- Lonjakan ulasan penipuan:",
-        "  Audit toko + tahan pencairan",
-        "- Klik tinggi, checkout rendah:",
-        "  Rekomendasi voucher diskon",
+        "- Nominal > Rp10 Juta:",
+        "  Tahan transaksi, konfirmasi manual",
+        "- Ulasan penipuan / Konversi < 10%:",
+        "  Audit toko / Voucher diskon",
     ], f_card_body, (51, 65, 85), 10)
     draw_rounded_box(draw, (1722, 862, 2098, 900), 8, (238, 242, 255), (99, 102, 241), 2)
     draw_centered_text(draw, (1722, 862, 2098, 900), "Aksi Nyata untuk Tim Operasional", f_badge, (67, 56, 202))

@@ -279,23 +279,24 @@ def build_ppt():
 
     # slide 5 karakteristik data dan pola fraud
     s5 = prs.slides.add_slide(blank)
-    add_header_footer(s5, "03. Data & Skenario Kasus", "Tiga Jenis Data & Empat Pola Anomali Fraud", 5)
+    add_header_footer(s5, "03. Data & Skenario Kasus", "Satu Topik Kafka (3 Variety) & 4 Sinyal Deteksi", 5)
 
     add_card(s5, 0.7, 1.55, 5.65, 5.15, fill_color=BG_SOFT, border_color=BORDER)
-    add_textbox(s5, 0.95, 1.76, 5.1, 0.38, "Sumber & Format Data (Simulasi Terukur)", size=17, bold=True, color=NAVY)
+    add_textbox(s5, 0.95, 1.76, 5.1, 0.38, "Struktur Pesan di Topik ecommerce_events", size=17, bold=True, color=NAVY)
     add_bullets(s5, 0.95, 2.25, 5.15, 4.25, [
-        ("Topik ecommerce.transactions (Terstruktur)", "transaction_id, user_id, merchant_id, category, amount_idr, quantity, payment_method, city, device_id, event_time."),
-        ("Topik ecommerce.clickstream (Semi-Terstruktur)", "JSON bersarang berisi session_id, action (view, add_to_cart, checkout), product_id, dan objek metadata (browser, os, ip, referrer)."),
-        ("Topik ecommerce.reviews (Tidak Terstruktur)", "Teks bebas ulasan pembeli beserta rating dan timestamp untuk mendeteksi spam bot serta keluhan penipuan."),
+        ("Data Terstruktur (Transaksi)", "event_id, event_type, user_id, merchant_id, category, amount_idr, quantity, payment_method, event_time."),
+        ("Data Semi-Terstruktur (Nested JSON)", "Objek clickstream berisi session_id, device, browser, city, ip_address, dan referrer."),
+        ("Data Tidak Terstruktur (Teks Ulasan)", "Field review_text dan rating pembeli untuk mendeteksi keluhan penipuan secara otomatis."),
+        ("Alasan 1 Topik Terpadu", "Alur PySpark jauh lebih sederhana tanpa stream-to-stream join yang boros RAM, namun tetap mencakup 3 Variety."),
     ], size=13.5, space_after=13)
 
     add_card(s5, 6.65, 1.55, 5.98, 5.15, fill_color=RED_SOFT, border_color=BORDER)
-    add_textbox(s5, 6.90, 1.76, 5.4, 0.38, "Empat Pola Anomali Fraud yang Dideteksi", size=17, bold=True, color=RED_DARK)
+    add_textbox(s5, 6.90, 1.76, 5.4, 0.38, "3 Pola Fraud + 1 Sinyal Konversi Bisnis", size=17, bold=True, color=RED_DARK)
     add_bullets(s5, 6.90, 2.25, 5.5, 4.25, [
-        ("1. Velocity Burst (Card Testing)", "Satu akun atau IP melakukan >= 5 transaksi beruntun dalam jendela waktu 1 menit."),
-        ("2. High-Value Transaction Spike", "Nominal transaksi melonjak drastis di atas kewajaran kategori atau histori akun baru."),
-        ("3. Geo / Device Hopping", "Satu akun berpindah kota atau perangkat berbeda dalam rentang waktu yang tidak masuk akal."),
-        ("4. Suspicious Review & Bot Pattern", "Lonjakan ulasan berulang dengan teks identik atau kata kunci penipuan (scam, palsu, barang kosong) pada merchant tertentu."),
+        ("1. Transaksi Kilat (Velocity Burst)", "Satu akun melakukan >= 5 transaksi beruntun dalam jendela waktu 1 menit."),
+        ("2. Nominal Melonjak (High-Value Spike)", "Nominal transaksi melebihi Rp10.000.000 dalam satu kali pembayaran."),
+        ("3. Ulasan Indikasi Penipuan (Teks)", "Ulasan pembeli mengandung kata kunci penipuan (palsu, penipu, scam, barang kosong)."),
+        ("4. Konversi Rendah (Clickstream)", "Kategori produk tinggi klik tetapi rasio checkout di bawah 10%."),
     ], size=13.5, space_after=12)
 
     # slide 6 diagram arsitektur 4 layer
@@ -321,8 +322,8 @@ def build_ppt():
         style_cell(t7.cell(0, c), h, size=12.5, bold=True, color=BG_WHITE, fill=NAVY)
 
     r7 = [
-        ("Kafka KRaft", "Mode tanpa Zookeeper, Heap 256–384m, 3 topik event.", "650m"),
-        ("PySpark\nlocal[2]", "Structured Streaming + Batch dalam 1 container, Driver 768m.", "1200m"),
+        ("Kafka KRaft", "Mode tanpa Zookeeper, Heap 256–384m, 1 topik ecommerce_events.", "650m"),
+        ("PySpark\nlocal[2]", "2 skrip (stream_fraud_detector + batch_benchmark), Driver 768m.", "1200m"),
         ("MongoDB +\nParquet", "MongoDB cache 0.25 GB (hot data) + Parquet Snappy di disk lokal.", "512m"),
         ("Streamlit", "Dashboard interaktif membaca MongoDB & Parquet terfilter.", "384m"),
     ]
@@ -357,9 +358,9 @@ def build_ppt():
 
     add_textbox(s8, 6.3, 1.52, 6.3, 0.38, "Panel Rekomendasi Aksi Preskriptif (Bukan Sekadar Grafik)", size=16.5, bold=True, color=TEAL)
     actions = [
-        ("1. Keamanan Akun (Risk Score >= 80 / Velocity Burst)", "Rekomendasi: Blokir sementara akun terindikasi fraud dan paksa verifikasi OTP/KYC sebelum transaksi berikutnya.", RED_SOFT, RED_DARK),
-        ("2. Keamanan Merchant (Lonjakan Ulasan Penipuan)", "Rekomendasi: Tandai toko untuk audit manual dan tahan pencairan dana sementara hingga verifikasi selesai.", AMBER_SOFT, AMBER_DARK),
-        ("3. Optimasi Konversi (Klik Tinggi, Checkout < 10%)", "Rekomendasi: Terbitkan voucher diskon 10–15% atau promo gratis ongkir khusus pada kategori produk tersebut.", BLUE_SOFT, NAVY),
+        ("1. Transaksi Kilat (>= 5/menit) & Nominal > Rp10 Juta", "Aksi: Blokir sementara akun + minta verifikasi OTP, atau tahan transaksi besar untuk konfirmasi manual.", RED_SOFT, RED_DARK),
+        ("2. Ulasan Indikasi Penipuan pada Merchant", "Aksi: Tandai toko untuk audit manual dan tahan pencairan dana sementara hingga pemeriksaan selesai.", AMBER_SOFT, AMBER_DARK),
+        ("3. Kategori Tinggi Klik tapi Checkout < 10%", "Aksi: Terbitkan voucher diskon 10–15% atau promo gratis ongkir khusus untuk mendorong konversi kategori.", BLUE_SOFT, NAVY),
     ]
     for idx, (atitle, adesc, abg, aclr) in enumerate(actions):
         y = 2.02 + idx * 1.58

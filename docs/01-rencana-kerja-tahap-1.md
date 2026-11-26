@@ -15,7 +15,7 @@
   - `dev`: branch pengembangan aktif untuk dokumen rancangan, PPT Progress Report, kode pipeline, skrip benchmark, dan bahan laporan akhir.
 
 ## 2. Hasil Pemeriksaan Kondisi VPS Ubuntu
-Pemeriksaan dilakukan pada 27 November 2026 tanpa menyentuh atau menghentikan layanan yang sudah berjalan di VPS (Altay, OmniRoute, Blockbench).
+Pemeriksaan dilakukan pada 27 November 2026 pada VPS Ubuntu 2 vCPU dan 4 GB RAM sebelum instalasi container.
 
 | Komponen | Hasil Pengecekan | Catatan & Rekomendasi |
 |---|---|---|

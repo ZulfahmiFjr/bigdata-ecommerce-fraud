@@ -40,8 +40,9 @@ Kami menerapkan pola pemrosesan gabungan (*Lambda-lite*):
 - **Real-Time / Stream Processing:** Memproses event yang baru masuk dari Kafka untuk mendeteksi fraud berlatensi rendah dan memperbarui metrik dashboard secara langsung.
 - **Batch Processing:** Mengolah arsip data historis dalam format Parquet untuk analisis tren konversi per kategori, analisis sentimen/kata kunci ulasan, serta **benchmark performa Spark** (perbandingan waktu eksekusi sebelum dan sesudah optimasi partisi dan caching).
 
-## 5. Empat Pola Anomali Fraud yang Dideteksi
-1. **Velocity Burst (Card Testing):** Satu akun atau IP melakukan transaksi beruntun dalam jumlah banyak (>= 5 transaksi) dalam jendela waktu singkat (1 menit).
-2. **High-Value Transaction Spike:** Nominal transaksi melonjak ekstrem di atas rata-rata historis akun atau ambang wajar kategori (misalnya > Rp15.000.000 pada akun baru).
-3. **Geo / Device Hopping (Account Takeover):** Satu akun berpindah kota atau perangkat berbeda secara tidak wajar dalam rentang waktu berdekatan.
-4. **Suspicious Review & Bot Pattern:** Pengiriman ulasan teks berulang dengan pola teks identik atau kata kunci indikasi penipuan (*scam*, *palsu*, *barang kosong*, *penipu*) yang melonjak pada produk/merchant tertentu.
+## 5. Tiga Pola Anomali Fraud & Satu Sinyal Bisnis yang Dideteksi
+Agar logika sistem tetap sederhana, mudah dijelaskan, dan langsung berdampak ke operasional, kami fokus pada 3 pola fraud utama ditambah 1 sinyal konversi bisnis:
+1. **Transaksi Kilat (Velocity Burst / Card Testing):** Satu akun melakukan >= 5 transaksi beruntun dalam jendela waktu 1 menit -> *Aksi:* blokir sementara akun dan minta verifikasi OTP.
+2. **Nominal Melonjak (High-Value Spike):** Nominal transaksi melebihi Rp10.000.000 dalam satu kali pembayaran -> *Aksi:* tahan transaksi sementara untuk konfirmasi manual.
+3. **Ulasan Indikasi Penipuan (Unstructured Text):** Teks ulasan pembeli mengandung kata kunci keluhan penipuan (*palsu*, *penipu*, *scam*, *barang kosong*, *bohong*, *abal-abal*) -> *Aksi:* audit toko dan tahan pencairan dana sementara.
+4. **Konversi Rendah (Clickstream Funnel):** Kategori produk mencatat jumlah klik tinggi tetapi rasio checkout di bawah 10% -> *Aksi:* rekomendasikan penerbitan voucher diskon 10–15% atau gratis ongkir khusus kategori tersebut.
