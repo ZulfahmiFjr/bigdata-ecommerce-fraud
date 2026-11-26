@@ -1,0 +1,91 @@
+=== WAKTU VERIFIKASI ===
+2026-11-26 21:43:58 UTC
+
+=== DOCKER COMPOSE PS ===
+NAME             IMAGE                               COMMAND                  SERVICE     CREATED         STATUS                   PORTS
+bdef-dashboard   bigdata-ecommerce-fraud-dashboard   "streamlit run dashb…"   dashboard   5 minutes ago   Up 5 minutes             0.0.0.0:8501->8501/tcp, [::]:8501->8501/tcp
+bdef-kafka       apache/kafka:3.9.0                  "/__cacert_entrypoin…"   kafka       4 minutes ago   Up 4 minutes (healthy)   9092/tcp
+bdef-mongodb     mongo:7                             "docker-entrypoint.s…"   mongodb     5 minutes ago   Up 5 minutes (healthy)   127.0.0.1:27017->27017/tcp
+bdef-producer    bigdata-ecommerce-fraud-producer    "python -u -m ingest…"   producer    5 minutes ago   Up 4 minutes             
+bdef-spark       bigdata-ecommerce-fraud-spark       "/opt/entrypoint.sh …"   spark       5 minutes ago   Up 18 seconds            
+
+=== DOCKER STATS (MEM_LIMIT & PEMAKAIAN AKTUAL) ===
+NAME             CPU %     MEM USAGE / LIMIT     MEM %
+bdef-kafka       1.87%     327.1MiB / 650MiB     50.32%
+bdef-spark       33.99%    219.5MiB / 1.172GiB   18.29%
+bdef-producer    1.42%     17.55MiB / 128MiB     13.71%
+bdef-dashboard   0.00%     18.89MiB / 384MiB     4.92%
+bdef-mongodb     29.45%    168.3MiB / 512MiB     32.87%
+
+=== MEMORI & SWAP HOST VPS ===
+               total        used        free      shared  buff/cache   available
+Mem:           3.6Gi       2.3Gi       631Mi        13Mi       1.0Gi       1.4Gi
+Swap:          3.9Gi       1.3Gi       2.6Gi
+
+=== RINGKASAN MONGODB ===
+realtime_metrics: 5
+fraud_alerts: 30
+prescriptive_actions: 31
+benchmark_results: 1
+fraud_by_type: [{"_id":"Nominal Melonjak","n":14},{"_id":"Ulasan Penipuan","n":8},{"_id":"Transaksi Kilat","n":8}]
+actions_by_cat: [{"_id":"Optimasi Konversi","n":1},{"_id":"Verifikasi Transaksi","n":14},{"_id":"Keamanan Akun","n":8},{"_id":"Audit Merchant","n":8}]
+
+=== SAMPLE PARTISI PARQUET ===
+data/parquet/events
+data/parquet/events/event_date=2026-11-26
+data/parquet/events/event_date=2026-11-26/category=elektronik
+data/parquet/events/event_date=2026-11-26/category=fashion
+data/parquet/events/event_date=2026-11-26/category=gadget
+data/parquet/events/event_date=2026-11-26/category=kecantikan
+data/parquet/events/event_date=2026-11-26/category=rumah_tangga
+
+=== HASIL BENCHMARK 1 JUTA BARIS ===
+{
+  "run_at": "2026-11-26T21:43:37.413030+00:00",
+  "dataset_rows": 1000000,
+  "filter_query": "event_date='2026-11-27' AND category='elektronik' (3 agregasi analitik)",
+  "baseline": {
+    "label": "Sebelum Optimasi (JSON, shuffle=200, tanpa cache)",
+    "query_time_sec": 39.722,
+    "write_time_sec": 6.05,
+    "storage_mb": 180.77,
+    "shuffle_partitions": 200,
+    "partitioned": false,
+    "cached": false
+  },
+  "optimized": {
+    "label": "Sesudah Optimasi (Parquet Partisi, shuffle=4, cache)",
+    "query_time_sec": 6.966,
+    "write_time_sec": 26.165,
+    "storage_mb": 9.18,
+    "shuffle_partitions": 4,
+    "partitioned": true,
+    "cached": true
+  },
+  "speedup_x": 5.7,
+  "time_saved_pct": 82.46,
+  "storage_saved_pct": 94.92
+}
+=== SAMPLE LOG PRODUCER (10 BARIS TERAKHIR) ===
+[producer] total event terkirim ke 'ecommerce_events': 1140
+[producer] total event terkirim ke 'ecommerce_events': 1200
+[producer] total event terkirim ke 'ecommerce_events': 1260
+[producer] total event terkirim ke 'ecommerce_events': 1320
+[producer] total event terkirim ke 'ecommerce_events': 1380
+[producer] total event terkirim ke 'ecommerce_events': 1440
+[producer] total event terkirim ke 'ecommerce_events': 1500
+[producer] total event terkirim ke 'ecommerce_events': 1560
+[producer] total event terkirim ke 'ecommerce_events': 1620
+[producer] total event terkirim ke 'ecommerce_events': 1680
+
+=== SAMPLE LOG SPARK STREAMING (10 BARIS TERAKHIR) ===
+26/11/26 21:43:59 INFO Executor: Fetching spark://4352b4d561e1:44917/jars/commons-pool2-2.11.1.jar with timestamp 1795729435230
+26/11/26 21:43:59 INFO Utils: Fetching spark://4352b4d561e1:44917/jars/commons-pool2-2.11.1.jar to /tmp/spark-local/spark-70000b76-3e42-4b69-8021-fe276b82d459/userFiles-f24a992f-e28e-4338-b40a-3cda17a420ce/fetchFileTemp8885226608498622282.tmp
+26/11/26 21:44:00 INFO Executor: Adding file:/tmp/spark-local/spark-70000b76-3e42-4b69-8021-fe276b82d459/userFiles-f24a992f-e28e-4338-b40a-3cda17a420ce/commons-pool2-2.11.1.jar to class loader default
+26/11/26 21:44:00 INFO Utils: Successfully started service 'org.apache.spark.network.netty.NettyBlockTransferService' on port 39555.
+26/11/26 21:44:00 INFO NettyBlockTransferService: Server created on 4352b4d561e1:39555
+26/11/26 21:44:00 INFO BlockManager: Using org.apache.spark.storage.RandomBlockReplicationPolicy for block replication policy
+26/11/26 21:44:00 INFO BlockManagerMaster: Registering BlockManager BlockManagerId(driver, 4352b4d561e1, 39555, None)
+26/11/26 21:44:00 INFO BlockManagerMasterEndpoint: Registering block manager 4352b4d561e1:39555 with 265.5 MiB RAM, BlockManagerId(driver, 4352b4d561e1, 39555, None)
+26/11/26 21:44:00 INFO BlockManagerMaster: Registered BlockManager BlockManagerId(driver, 4352b4d561e1, 39555, None)
+26/11/26 21:44:00 INFO BlockManager: Initialized BlockManager: BlockManagerId(driver, 4352b4d561e1, 39555, None)

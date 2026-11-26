@@ -1,0 +1,26 @@
+{
+  "run_at": "2026-11-26T21:43:37.413030+00:00",
+  "dataset_rows": 1000000,
+  "filter_query": "event_date='2026-11-27' AND category='elektronik' (3 agregasi analitik)",
+  "baseline": {
+    "label": "Sebelum Optimasi (JSON, shuffle=200, tanpa cache)",
+    "query_time_sec": 39.722,
+    "write_time_sec": 6.05,
+    "storage_mb": 180.77,
+    "shuffle_partitions": 200,
+    "partitioned": false,
+    "cached": false
+  },
+  "optimized": {
+    "label": "Sesudah Optimasi (Parquet Partisi, shuffle=4, cache)",
+    "query_time_sec": 6.966,
+    "write_time_sec": 26.165,
+    "storage_mb": 9.18,
+    "shuffle_partitions": 4,
+    "partitioned": true,
+    "cached": true
+  },
+  "speedup_x": 5.7,
+  "time_saved_pct": 82.46,
+  "storage_saved_pct": 94.92
+}
