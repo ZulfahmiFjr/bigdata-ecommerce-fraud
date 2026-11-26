@@ -72,7 +72,7 @@ def process_micro_batch(batch_df, batch_id, parquet_dir, mongo_db):
 
     # simpen arsip historis ke parquet terpartisi berdasarkan tanggal sama kategori
     (
-        enriched.write
+        enriched.coalesce(1).write
         .mode("append")
         .partitionBy("event_date", "category")
         .parquet(parquet_dir)

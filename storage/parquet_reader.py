@@ -1,6 +1,6 @@
 import os
 import pandas as pd
-import pyarrow.dataset as ds
+import pyarrow.parquet as pq
 
 
 def list_parquet_partitions(base_dir):
@@ -21,30 +21,52 @@ def list_parquet_partitions(base_dir):
     return sorted(dates), sorted(categories)
 
 
-def read_partitioned_parquet(base_dir, event_date=None, category=None, max_rows=500):
-    # baca data parquet terpartisi pake pyarrow dataset biar partition pruning jalan dan hemat RAM
+def read_partitioned_parquet(base_dir, event_date=None, category=None, max_rows=500, max_files=35):
+    # lakukan partition pruning manual ke folder event_date dan category lalu baca file terbaru biar cepet dan hemat RAM
     if not os.path.isdir(base_dir):
         return pd.DataFrame(), 0
-    has_parquet = False
-    for _, _, files in os.walk(base_dir):
-        if any(f.endswith(".parquet") for f in files):
-            has_parquet = True
-            break
-    if not has_parquet:
+
+    matched_files = []
+    for root, _, files in os.walk(base_dir):
+        rel = os.path.relpath(root, base_dir)
+        if rel == ".":
+            continue
+        parts = dict(p.split("=", 1) for p in rel.split(os.sep) if "=" in p)
+        f_date = parts.get("event_date")
+        f_cat = parts.get("category")
+        if event_date and event_date != "Semua" and f_date != event_date:
+            continue
+        if category and category != "Semua" and f_cat != category:
+            continue
+        for fname in files:
+            if fname.endswith(".parquet") and not fname.startswith("."):
+                fpath = os.path.join(root, fname)
+                try:
+                    mtime = os.path.getmtime(fpath)
+                except OSError:
+                    continue
+                matched_files.append((mtime, fpath, f_date, f_cat))
+
+    if not matched_files:
         return pd.DataFrame(), 0
 
-    dataset = ds.dataset(base_dir, format="parquet", partitioning="hive")
-    expr = None
-    if event_date and event_date != "Semua":
-        cond = ds.field("event_date") == event_date
-        expr = cond if expr is None else (expr & cond)
-    if category and category != "Semua":
-        cond = ds.field("category") == category
-        expr = cond if expr is None else (expr & cond)
+    # urutkan dari file terbaru dan batasi pembacaan biar dashboard tetep responsif di bawah 1 detik
+    matched_files.sort(key=lambda x: x[0], reverse=True)
+    frames = []
+    collected_rows = 0
+    for _, fpath, f_date, f_cat in matched_files[:max_files]:
+        try:
+            part_df = pq.read_table(fpath).to_pandas()
+            part_df["event_date"] = f_date
+            part_df["category"] = f_cat
+            frames.append(part_df)
+            collected_rows += len(part_df)
+            if collected_rows >= max_rows:
+                break
+        except Exception:
+            continue
 
-    table = dataset.to_table(filter=expr)
-    total_rows = table.num_rows
-    if total_rows == 0:
+    if not frames:
         return pd.DataFrame(), 0
-    df = table.slice(0, max_rows).to_pandas()
-    return df, total_rows
+    df = pd.concat(frames, ignore_index=True)
+    return df.head(max_rows), len(matched_files)

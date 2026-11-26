@@ -42,7 +42,12 @@ def load_benchmark_data(db):
 
 
 def format_idr(val):
-    return f"Rp{int(val):,}".replace(",", ".")
+    num = float(val or 0)
+    if num >= 1_000_000_000:
+        return f"Rp{num / 1_000_000_000:.2f} M".replace(".", ",")
+    if num >= 1_000_000:
+        return f"Rp{num / 1_000_000:.1f} Jt".replace(".", ",")
+    return f"Rp{int(num):,}".replace(",", ".")
 
 
 def main():
@@ -66,7 +71,12 @@ def main():
         db = load_db()
         metrics = fetch_recent_metrics(db, limit=60)
         alerts = fetch_recent_alerts(db, limit=120, fraud_type=fraud_filter, category=cat_filter)
-        actions = fetch_prescriptive_actions(db, limit=40, priority=prio_filter)
+        actions = fetch_prescriptive_actions(db, limit=80, priority=prio_filter)
+        # pastikan contoh rekomendasi optimasi konversi ikut ditarik pas filter semua aktif
+        if prio_filter == "Semua" and not any(a.get("action_category") == "Optimasi Konversi" for a in actions):
+            conv_doc = db.prescriptive_actions.find_one({"action_category": "Optimasi Konversi"}, {"_id": 0}, sort=[("created_at", -1)])
+            if conv_doc:
+                actions.append(conv_doc)
         benchmark = load_benchmark_data(db)
     except Exception as err:
         st.error(f"Gagal terhubung ke MongoDB: {err}")
@@ -146,7 +156,16 @@ def main():
         if not actions:
             st.info("Belum ada rekomendasi aksi yang terbentuk.")
         else:
-            for act in actions[:20]:
+            # tampilkan perwakilan terbaru dari tiap kategori aksi dulu biar semua tipe rekomendasi langsung kebaca
+            featured = []
+            seen_cats = set()
+            for act in actions:
+                acat = act.get("action_category", "")
+                if acat not in seen_cats:
+                    featured.append(act)
+                    seen_cats.add(acat)
+            ordered_actions = featured + [a for a in actions if a not in featured]
+            for act in ordered_actions[:15]:
                 prio = act.get("priority", "Sedang")
                 title_line = f"[{prio.upper()}] {act.get('action_category', 'Aksi')} — {act.get('target', '-')}"
                 body = f"**Pemicu:** {act.get('trigger', '-')}  \n**Rekomendasi Aksi:** {act.get('recommendation', '-')}"
@@ -160,23 +179,26 @@ def main():
     # tab 3 eksplorasi arsip parquet terpartisi event_date & category
     with tab3:
         st.subheader("Eksplorasi Arsip Historis Parquet Terpartisi")
-        dates, cats = list_parquet_partitions(PARQUET_DIR)
-        if not dates:
-            st.info("Folder Parquet terpartisi masih menunggu batch pertama dari Spark.")
-        else:
-            p1, p2 = st.columns(2)
-            sel_date = p1.selectbox("Filter Partisi event_date", ["Semua"] + dates)
-            sel_cat = p2.selectbox("Filter Partisi category", ["Semua"] + cats)
+        try:
+            dates, cats = list_parquet_partitions(PARQUET_DIR)
+            if not dates:
+                st.info("Folder Parquet terpartisi masih menunggu batch pertama dari Spark.")
+            else:
+                p1, p2 = st.columns(2)
+                sel_date = p1.selectbox("Filter Partisi event_date", ["Semua"] + dates)
+                sel_cat = p2.selectbox("Filter Partisi category", ["Semua"] + cats)
 
-            pdf, total_rows = read_partitioned_parquet(PARQUET_DIR, event_date=sel_date, category=sel_cat, max_rows=300)
-            st.caption(f"Struktur partisi aktif: event_date ({len(dates)} tanggal) x category ({len(cats)} kategori) | Total baris cocok: **{total_rows:,}**")
-            if not pdf.empty:
-                if "category" in pdf.columns and "amount_idr" in pdf.columns:
-                    agg = pdf.groupby("category", as_index=False)["amount_idr"].sum()
-                    fig_cat = px.bar(agg, x="category", y="amount_idr", title="Total Nilai Transaksi (Sampel Partisi)", color_discrete_sequence=["#0F766E"])
-                    fig_cat.update_layout(height=300, margin=dict(l=10, r=10, t=40, b=10))
-                    st.plotly_chart(fig_cat, use_container_width=True)
-                st.dataframe(pdf.head(100), use_container_width=True, height=300)
+                pdf, total_files = read_partitioned_parquet(PARQUET_DIR, event_date=sel_date, category=sel_cat, max_rows=300)
+                st.caption(f"Struktur partisi aktif: event_date ({len(dates)} tanggal) x category ({len(cats)} kategori) | File partisi cocok: **{total_files:,} file Parquet** | Sampel ditampilkan: **{len(pdf):,} baris**")
+                if not pdf.empty:
+                    if "category" in pdf.columns and "amount_idr" in pdf.columns:
+                        agg = pdf.groupby("category", as_index=False)["amount_idr"].sum()
+                        fig_cat = px.bar(agg, x="category", y="amount_idr", title="Total Nilai Transaksi per Kategori (Sampel Partisi Parquet)", color_discrete_sequence=["#0F766E"])
+                        fig_cat.update_layout(height=300, margin=dict(l=10, r=10, t=40, b=10))
+                        st.plotly_chart(fig_cat, use_container_width=True)
+                    st.dataframe(pdf.head(100), use_container_width=True, height=280)
+        except Exception as err:
+            st.warning(f"Gagal membaca sampel Parquet: {err}")
 
     # tab 4 bukti nyata optimasi spark (sebelum vs sesudah partisi + caching)
     with tab4:
