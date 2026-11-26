@@ -1,0 +1,136 @@
+services:
+  # layer 1 broker pesan apache kafka mode kraft tanpa zookeeper biar hemat RAM
+  kafka:
+    image: apache/kafka:3.9.0
+    container_name: bdef-kafka
+    mem_limit: 650m
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_NUM_PARTITIONS: 2
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_HEAP_OPTS: "-Xmx384m -Xms256m"
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9092' >/dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+      start_period: 20s
+    restart: unless-stopped
+
+  # layer 3 storage mongodb buat data real-time JSON dan alert fraud
+  mongodb:
+    image: mongo:7
+    container_name: bdef-mongodb
+    mem_limit: 512m
+    command: ["mongod", "--wiredTigerCacheSizeGB", "0.25", "--quiet"]
+    ports:
+      - "127.0.0.1:27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 15s
+    restart: unless-stopped
+
+  # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
+  producer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    container_name: bdef-producer
+    mem_limit: 128m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      EVENT_RATE_PER_SEC: "6"
+    volumes:
+      - ./ingestion:/app/ingestion:ro
+    command: ["python", "-u", "-m", "ingestion.producer"]
+    restart: unless-stopped
+
+  # layer 2 processing pyspark structured streaming mode local[2] hemat memori
+  spark:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.spark
+    container_name: bdef-spark
+    mem_limit: 1200m
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: ecommerce_bigdata
+      PARQUET_DIR: /app/data/parquet/events
+      CHECKPOINT_DIR: /app/data/checkpoints/stream_fraud
+      SPARK_DRIVER_MEMORY: 768m
+      SPARK_LOCAL_DIRS: /tmp/spark-local
+    volumes:
+      - ./processing:/app/processing:ro
+      - ./storage:/app/storage:ro
+      - ./data/parquet:/app/data/parquet
+      - ./data/checkpoints:/app/data/checkpoints
+      - ./docs/evidence:/app/docs/evidence
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - local[2]
+      - --driver-memory
+      - 768m
+      - --jars
+      - /opt/spark/extra-jars/spark-sql-kafka-0-10_2.12-3.5.3.jar,/opt/spark/extra-jars/spark-token-provider-kafka-0-10_2.12-3.5.3.jar,/opt/spark/extra-jars/kafka-clients-3.4.1.jar,/opt/spark/extra-jars/commons-pool2-2.11.1.jar
+      - /app/processing/stream_fraud_detector.py
+    restart: unless-stopped
+
+  # layer 4 visualization dashboard streamlit interaktif + panel preskriptif
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: bdef-dashboard
+    mem_limit: 384m
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: ecommerce_bigdata
+      PARQUET_DIR: /app/data/parquet/events
+      BENCHMARK_FILE: /app/docs/evidence/benchmark_results.json
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/app/dashboard:ro
+      - ./storage:/app/storage:ro
+      - ./data/parquet:/app/data/parquet:ro
+      - ./docs/evidence:/app/docs/evidence:ro
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
+    restart: unless-stopped
+
+volumes:
+  kafka_data:
+  mongo_data:
