@@ -21,26 +21,7 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_HEAP_OPTS: "-Xmx384m -Xms256m"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
-      # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
-  producer:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.python
-    container_name: bdef-producer
-    mem_limit: 128m
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_TOPIC: ecommerce_events
-      EVENT_RATE_PER_SEC: "6"
     volumes:
-      - ./ingestion:/app/ingestion:ro
-    command: ["python", "-u", "-m", "ingestion.producer"]
-    restart: unless-stopped
-
-volumes:
       - kafka_data:/tmp/kraft-combined-logs
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9092' >/dev/null 2>&1 || exit 1"]
@@ -58,26 +39,7 @@ volumes:
     command: ["mongod", "--wiredTigerCacheSizeGB", "0.25", "--quiet"]
     ports:
       - "127.0.0.1:27017:27017"
-      # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
-  producer:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.python
-    container_name: bdef-producer
-    mem_limit: 128m
-    depends_on:
-      kafka:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP: kafka:9092
-      KAFKA_TOPIC: ecommerce_events
-      EVENT_RATE_PER_SEC: "6"
     volumes:
-      - ./ingestion:/app/ingestion:ro
-    command: ["python", "-u", "-m", "ingestion.producer"]
-    restart: unless-stopped
-
-volumes:
       - mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
@@ -104,6 +66,69 @@ volumes:
     volumes:
       - ./ingestion:/app/ingestion:ro
     command: ["python", "-u", "-m", "ingestion.producer"]
+    restart: unless-stopped
+
+  # layer 2 processing pyspark structured streaming mode local[2] hemat memori
+  spark:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.spark
+    container_name: bdef-spark
+    mem_limit: 1200m
+    depends_on:
+      kafka:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: ecommerce_bigdata
+      PARQUET_DIR: /app/data/parquet/events
+      CHECKPOINT_DIR: /app/data/checkpoints/stream_fraud
+      SPARK_DRIVER_MEMORY: 768m
+      SPARK_LOCAL_DIRS: /tmp/spark-local
+    volumes:
+      - ./processing:/app/processing:ro
+      - ./storage:/app/storage:ro
+      - ./data/parquet:/app/data/parquet
+      - ./data/checkpoints:/app/data/checkpoints
+      - ./docs/evidence:/app/docs/evidence
+    command:
+      - /opt/spark/bin/spark-submit
+      - --master
+      - local[2]
+      - --driver-memory
+      - 768m
+      - --jars
+      - /opt/spark/extra-jars/spark-sql-kafka-0-10_2.12-3.5.3.jar,/opt/spark/extra-jars/spark-token-provider-kafka-0-10_2.12-3.5.3.jar,/opt/spark/extra-jars/kafka-clients-3.4.1.jar,/opt/spark/extra-jars/commons-pool2-2.11.1.jar
+      - /app/processing/stream_fraud_detector.py
+    restart: unless-stopped
+
+  # layer 4 visualization dashboard streamlit interaktif + panel preskriptif
+  dashboard:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.dashboard
+    container_name: bdef-dashboard
+    mem_limit: 384m
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    environment:
+      MONGO_URI: mongodb://mongodb:27017
+      MONGO_DB: ecommerce_bigdata
+      PARQUET_DIR: /app/data/parquet/events
+      BENCHMARK_FILE: /app/docs/evidence/benchmark_results.json
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./dashboard:/app/dashboard:ro
+      - ./storage:/app/storage:ro
+      - ./data/parquet:/app/data/parquet:ro
+      - ./docs/evidence:/app/docs/evidence:ro
+    command: ["streamlit", "run", "dashboard/app.py", "--server.port=8501", "--server.address=0.0.0.0", "--server.headless=true"]
     restart: unless-stopped
 
 volumes:
