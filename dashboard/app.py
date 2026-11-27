@@ -149,8 +149,33 @@ def main():
             else:
                 st.info("Belum ada alert fraud yang tercatat.")
 
+    # tab 2 panel rekomendasi aksi preskriptif yg langsung bisa dipakai tim operasional
     with tab2:
-        st.info("Panel rekomendasi preskriptif dalam pengerjaan")
+        st.subheader("Panel Rekomendasi Aksi Preskriptif")
+        st.write("Sistem menerjemahkan hasil deteksi fraud dan rasio konversi clickstream menjadi saran tindakan langsung untuk tim operasional dan pemasaran.")
+        if not actions:
+            st.info("Belum ada rekomendasi aksi yang terbentuk.")
+        else:
+            # tampilkan perwakilan terbaru dari tiap kategori aksi dulu biar semua tipe rekomendasi langsung kebaca
+            featured = []
+            seen_cats = set()
+            for act in actions:
+                acat = act.get("action_category", "")
+                if acat not in seen_cats:
+                    featured.append(act)
+                    seen_cats.add(acat)
+            ordered_actions = featured + [a for a in actions if a not in featured]
+            for act in ordered_actions[:15]:
+                prio = act.get("priority", "Sedang")
+                title_line = f"[{prio.upper()}] {act.get('action_category', 'Aksi')} — {act.get('target', '-')}"
+                body = f"**Pemicu:** {act.get('trigger', '-')}  \n**Rekomendasi Aksi:** {act.get('recommendation', '-')}"
+                if prio == "Kritis":
+                    st.error(f"**{title_line}**  \n{body}")
+                elif prio == "Tinggi":
+                    st.warning(f"**{title_line}**  \n{body}")
+                else:
+                    st.info(f"**{title_line}**  \n{body}")
+
     with tab3:
         st.info("Tab eksplorasi parquet dalam pengerjaan")
     with tab4:
