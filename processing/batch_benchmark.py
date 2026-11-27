@@ -180,8 +180,21 @@ def main():
         "storage_saved_pct": storage_saved_pct,
     }
 
-    print(f"[benchmark] baseline={baseline_sec}s optimized={optimized_sec}s speedup={speedup}x")
+    with open(evidence_file, "w", encoding="utf-8") as f:
+        json.dump(result, f, indent=2)
+
+    try:
+        db = get_mongo_db()
+        ensure_indexes(db)
+        save_benchmark_result(db, result)
+        print("[benchmark] hasil benchmark berhasil disimpan ke mongodb dan JSON evidence")
+    except Exception as err:
+        print(f"[benchmark] peringatan gagal simpen ke mongodb: {err}")
+
+    # bersihin folder temporary benchmark raw JSON biar disk VPS tetep hemat
+    shutil.rmtree(base_dir, ignore_errors=True)
     spark.stop()
+    print(f"[benchmark] SELESAI -> percepatan {speedup}x ({time_saved_pct}% lebih cepat), hemat disk {storage_saved_pct}%")
 
 
 if __name__ == "__main__":
