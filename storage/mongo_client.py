@@ -58,3 +58,29 @@ def save_benchmark_result(db, result_doc):
     doc = dict(result_doc)
     doc.setdefault("run_at", datetime.now(timezone.utc).isoformat())
     db.benchmark_results.insert_one(doc)
+
+
+def fetch_recent_metrics(db, limit=60):
+    rows = list(db.realtime_metrics.find({}, {"_id": 0}).sort("recorded_at", DESCENDING).limit(limit))
+    rows.reverse()
+    return rows
+
+
+def fetch_recent_alerts(db, limit=100, fraud_type=None, category=None):
+    query = {}
+    if fraud_type and fraud_type != "Semua":
+        query["fraud_type"] = fraud_type
+    if category and category != "Semua":
+        query["category"] = category
+    return list(db.fraud_alerts.find(query, {"_id": 0}).sort("detected_at", DESCENDING).limit(limit))
+
+
+def fetch_prescriptive_actions(db, limit=40, priority=None):
+    query = {}
+    if priority and priority != "Semua":
+        query["priority"] = priority
+    return list(db.prescriptive_actions.find(query, {"_id": 0}).sort("created_at", DESCENDING).limit(limit))
+
+
+def fetch_latest_benchmark(db):
+    return db.benchmark_results.find_one({}, {"_id": 0}, sort=[("run_at", DESCENDING)])
