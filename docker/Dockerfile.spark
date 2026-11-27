@@ -1,0 +1,10 @@
+FROM apache/spark:3.5.3-python3
+
+USER root
+WORKDIR /app
+
+# pasang pymongo aja buat nulis hasil deteksi dan benchmark ke mongodb
+RUN pip install --no-cache-dir pymongo==4.10.1
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
