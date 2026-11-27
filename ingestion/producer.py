@@ -43,3 +43,23 @@ def make_event(event_type, user_id, merchant_id, category, amount_idr=0, quantit
         "review_text": review_text,
         "rating": int(rating),
     }
+
+
+def build_normal_event():
+    category = random.choice(CATEGORIES)
+    user_id = f"usr_{random.randint(1001, 1400)}"
+    merchant_id = f"mrc_{random.randint(101, 130)}"
+
+    # kategori elektronik sama gadget dibikin banyak klik tp checkout rendah biar sinyal voucher kebaca nyata
+    if category in ("elektronik", "gadget"):
+        event_type = random.choices(["view", "add_to_cart", "checkout", "review"], weights=[72, 18, 5, 5])[0]
+    else:
+        event_type = random.choices(["view", "add_to_cart", "checkout", "review"], weights=[45, 22, 23, 10])[0]
+
+    if event_type == "checkout":
+        base_price = random.randint(85_000, 2_800_000)
+        qty = random.randint(1, 3)
+        return make_event("checkout", user_id, merchant_id, category, amount_idr=base_price * qty, quantity=qty)
+    if event_type == "review":
+        return make_event("review", user_id, merchant_id, category, review_text=random.choice(NORMAL_REVIEWS), rating=random.choice([4, 5]))
+    return make_event(event_type, user_id, merchant_id, category)
