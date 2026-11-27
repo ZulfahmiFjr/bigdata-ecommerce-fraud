@@ -43,3 +43,4 @@ Semua layanan dikasih batas RAM eksplisit di Docker Compose supaya total puncak 
 ## Cara Menjalankan Singkat
 
 Pastikan Docker dan Docker Compose udah aktif di VPS atau laptop, trus jalankan `docker compose up -d --build` buat nyalain seluruh pipeline secara otomatis, setelah itu buka browser ke port `8501` buat liat Streamlit Dashboard dan jalankan `bash scripts/run_benchmark.sh` kalo mau ngulang pengujian benchmark Spark.
+
