@@ -1,10 +1,10 @@
-from kafka import KafkaProducer
 import json
 import os
 import random
 import time
 import uuid
 from datetime import datetime, timezone
+from kafka import KafkaProducer
 
 CATEGORIES = ["elektronik", "fashion", "gadget", "rumah_tangga", "kecantikan"]
 PAYMENTS = ["e_wallet", "virtual_account", "kartu_kredit", "cod"]
@@ -18,6 +18,13 @@ NORMAL_REVIEWS = [
     "produk berfungsi dgan baik, puas belanja di toko ini",
     "bahan nyaman dipakai, ukuran pas sesuai deskripsi",
     "sampai tepat waktu, kondisi mulus tanpa cacat",
+]
+
+FRAUD_REVIEWS = [
+    "hati-hati toko penipu, barang yg datang palsu dan tidak sesuai foto",
+    "paket datang tapi barang kosong, ini scam banget jangan beli di sini",
+    "penjual bohong, produk abal-abal dan chat langsung diblokir",
+    "barang palsu jelas banget, indikasi scam di toko ini tolong dicek",
 ]
 
 
@@ -97,26 +104,37 @@ def run_producer():
     while True:
         cycle += 1
         batch_events = []
+
+        # pola 1 transaksi kilat (burst 6 transaksi beruntun dari satu akun tiap 35 siklus)
         if cycle % 35 == 0:
             suspect_user = f"usr_burst_{random.randint(1, 15)}"
             suspect_merchant = f"mrc_{random.randint(101, 115)}"
             cat = random.choice(["gadget", "elektronik"])
             for _ in range(6):
                 batch_events.append(make_event("checkout", suspect_user, suspect_merchant, cat, amount_idr=random.randint(450_000, 1_800_000), quantity=1))
+        # pola 2 transaksi nominal melonjak di atas 10 juta tiap 22 siklus
         elif cycle % 22 == 0:
             whale_user = f"usr_high_{random.randint(1, 25)}"
             merchant = f"mrc_{random.randint(101, 125)}"
             cat = random.choice(["elektronik", "gadget"])
             batch_events.append(make_event("checkout", whale_user, merchant, cat, amount_idr=random.randint(11_500_000, 26_000_000), quantity=1))
+        # pola 3 ulasan pembeli yg ngandung kata kunci penipuan tiap 28 siklus
+        elif cycle % 28 == 0:
+            reviewer = f"usr_{random.randint(1001, 1400)}"
+            bad_merchant = f"mrc_suspect_{random.randint(1, 6)}"
+            cat = random.choice(CATEGORIES)
+            batch_events.append(make_event("review", reviewer, bad_merchant, cat, review_text=random.choice(FRAUD_REVIEWS), rating=1))
         else:
             batch_events.append(build_normal_event())
 
         for ev in batch_events:
             producer.send(topic, value=ev)
             sent_count += 1
+
         if sent_count % 60 == 0:
             producer.flush()
             print(f"[producer] total event terkirim ke '{topic}': {sent_count}")
+
         time.sleep(sleep_interval)
 
 
