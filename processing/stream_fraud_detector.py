@@ -46,3 +46,20 @@ def build_spark_session():
     )
     spark.sparkContext.setLogLevel("WARN")
     return spark
+
+
+def process_micro_batch(batch_df, batch_id, parquet_dir, mongo_db):
+    # skip kalo micro-batch kosong biar ga buang CPU atau bikin file parquet kosong
+    if batch_df.rdd.isEmpty():
+        return
+    enriched = (
+        batch_df
+        .withColumn("event_date", F.substring(F.col("event_time"), 1, 10))
+        .withColumn("device", F.col("clickstream.device"))
+        .withColumn("city", F.col("clickstream.city"))
+        .withColumn("ip_address", F.col("clickstream.ip_address"))
+        .withColumn("referrer", F.col("clickstream.referrer"))
+        .drop("clickstream")
+    )
+    # simpen arsip historis ke parquet terpartisi berdasarkan tanggal sama kategori
+    enriched.write.mode("append").partitionBy("event_date", "category").parquet(parquet_dir)
