@@ -78,3 +78,111 @@ def run_analytics_queries(df):
         .collect()
     )
     return len(q1), len(q2), len(q3)
+
+
+def main():
+    num_rows = int(os.getenv("BENCHMARK_ROWS", "1000000"))
+    base_dir = os.getenv("BENCHMARK_DIR", "/app/data/parquet/benchmark_tmp")
+    evidence_file = os.getenv("BENCHMARK_FILE", "/app/docs/evidence/benchmark_results.json")
+
+    raw_json_dir = os.path.join(base_dir, "raw_json_unpartitioned")
+    opt_parquet_dir = os.path.join(base_dir, "opt_parquet_partitioned")
+
+    # bersihin sisa folder benchmark lama kalo ada biar ukuran disk akurat
+    if os.path.exists(base_dir):
+        shutil.rmtree(base_dir)
+    os.makedirs(base_dir, exist_ok=True)
+    os.makedirs(os.path.dirname(evidence_file), exist_ok=True)
+
+    spark = (
+        SparkSession.builder
+        .appName("SparkOptimizationBenchmark")
+        .master("local[2]")
+        .config("spark.sql.parquet.compression.codec", "snappy")
+        .config("spark.ui.enabled", "false")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("WARN")
+
+    print(f"[benchmark] menyiapkan dataset historis sebanyak {num_rows:,} baris")
+    source_df = build_synthetic_dataset(spark, num_rows).persist(StorageLevel.MEMORY_AND_DISK)
+    source_df.count()
+
+    # simpan versi mentah (JSON tanpa partisi) sama versi optimasi (parquet snappy terpartisi)
+    t_w1 = time.perf_counter()
+    source_df.write.mode("overwrite").json(raw_json_dir)
+    write_raw_sec = round(time.perf_counter() - t_w1, 3)
+
+    t_w2 = time.perf_counter()
+    source_df.write.mode("overwrite").partitionBy("event_date", "category").parquet(opt_parquet_dir)
+    write_opt_sec = round(time.perf_counter() - t_w2, 3)
+    source_df.unpersist()
+
+    raw_size_mb = dir_size_mb(raw_json_dir)
+    opt_size_mb = dir_size_mb(opt_parquet_dir)
+    storage_saved_pct = round(((raw_size_mb - opt_size_mb) / raw_size_mb) * 100.0, 2) if raw_size_mb > 0 else 0.0
+    print(f"[benchmark] ukuran disk -> raw JSON: {raw_size_mb} MB | parquet terpartisi: {opt_size_mb} MB (hemat {storage_saved_pct}%)")
+
+    target_date = "2026-11-27"
+    target_cat = "elektronik"
+
+    # skenario 1 sebelum optimasi: baca JSON tanpa partisi, shuffle partitions default 200, tanpa cache
+    spark.conf.set("spark.sql.shuffle.partitions", "200")
+    t_b0 = time.perf_counter()
+    base_df = (
+        spark.read.json(raw_json_dir)
+        .filter((F.col("event_date") == target_date) & (F.col("category") == target_cat))
+    )
+    run_analytics_queries(base_df)
+    baseline_sec = round(time.perf_counter() - t_b0, 3)
+    print(f"[benchmark] SEBELUM optimasi (raw JSON, shuffle=200, no cache): {baseline_sec} detik")
+
+    # skenario 2 sesudah optimasi: parquet terpartisi (partition pruning), shuffle partitions 4, persist
+    spark.conf.set("spark.sql.shuffle.partitions", "4")
+    t_o0 = time.perf_counter()
+    opt_df = (
+        spark.read.parquet(opt_parquet_dir)
+        .filter((F.col("event_date") == target_date) & (F.col("category") == target_cat))
+        .persist(StorageLevel.MEMORY_AND_DISK)
+    )
+    run_analytics_queries(opt_df)
+    opt_df.unpersist()
+    optimized_sec = round(time.perf_counter() - t_o0, 3)
+    print(f"[benchmark] SESUDAH optimasi (parquet partisi, shuffle=4, cache): {optimized_sec} detik")
+
+    speedup = round(baseline_sec / optimized_sec, 2) if optimized_sec > 0 else 0.0
+    time_saved_pct = round(((baseline_sec - optimized_sec) / baseline_sec) * 100.0, 2) if baseline_sec > 0 else 0.0
+
+    result = {
+        "run_at": datetime.now(timezone.utc).isoformat(),
+        "dataset_rows": num_rows,
+        "filter_query": f"event_date='{target_date}' AND category='{target_cat}' (3 agregasi analitik)",
+        "baseline": {
+            "label": "Sebelum Optimasi (JSON, shuffle=200, tanpa cache)",
+            "query_time_sec": baseline_sec,
+            "write_time_sec": write_raw_sec,
+            "storage_mb": raw_size_mb,
+            "shuffle_partitions": 200,
+            "partitioned": False,
+            "cached": False,
+        },
+        "optimized": {
+            "label": "Sesudah Optimasi (Parquet Partisi, shuffle=4, cache)",
+            "query_time_sec": optimized_sec,
+            "write_time_sec": write_opt_sec,
+            "storage_mb": opt_size_mb,
+            "shuffle_partitions": 4,
+            "partitioned": True,
+            "cached": True,
+        },
+        "speedup_x": speedup,
+        "time_saved_pct": time_saved_pct,
+        "storage_saved_pct": storage_saved_pct,
+    }
+
+    print(f"[benchmark] baseline={baseline_sec}s optimized={optimized_sec}s speedup={speedup}x")
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
