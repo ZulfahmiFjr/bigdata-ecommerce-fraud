@@ -21,7 +21,26 @@ services:
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_HEAP_OPTS: "-Xmx384m -Xms256m"
       CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
+  producer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    container_name: bdef-producer
+    mem_limit: 128m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      EVENT_RATE_PER_SEC: "6"
     volumes:
+      - ./ingestion:/app/ingestion:ro
+    command: ["python", "-u", "-m", "ingestion.producer"]
+    restart: unless-stopped
+
+volumes:
       - kafka_data:/tmp/kraft-combined-logs
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/9092' >/dev/null 2>&1 || exit 1"]
@@ -39,7 +58,26 @@ services:
     command: ["mongod", "--wiredTigerCacheSizeGB", "0.25", "--quiet"]
     ports:
       - "127.0.0.1:27017:27017"
+      # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
+  producer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    container_name: bdef-producer
+    mem_limit: 128m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      EVENT_RATE_PER_SEC: "6"
     volumes:
+      - ./ingestion:/app/ingestion:ro
+    command: ["python", "-u", "-m", "ingestion.producer"]
+    restart: unless-stopped
+
+volumes:
       - mongo_data:/data/db
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
@@ -47,6 +85,25 @@ services:
       timeout: 5s
       retries: 10
       start_period: 15s
+    restart: unless-stopped
+
+  # layer 1 producer python yg kirim stream 3 jenis data ke satu topik kafka
+  producer:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.python
+    container_name: bdef-producer
+    mem_limit: 128m
+    depends_on:
+      kafka:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP: kafka:9092
+      KAFKA_TOPIC: ecommerce_events
+      EVENT_RATE_PER_SEC: "6"
+    volumes:
+      - ./ingestion:/app/ingestion:ro
+    command: ["python", "-u", "-m", "ingestion.producer"]
     restart: unless-stopped
 
 volumes:
