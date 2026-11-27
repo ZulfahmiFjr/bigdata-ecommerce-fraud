@@ -53,3 +53,28 @@ def build_synthetic_dataset(spark, num_rows):
         .withColumn("device", F.when((F.col("id") % 2) == 0, F.lit("android_app")).otherwise(F.lit("web_chrome")))
     )
     return df
+
+
+def run_analytics_queries(df):
+    # jalanin 3 query analitik khas e-commerce buat ngukur waktu komputasi
+    q1 = (
+        df.groupBy("merchant_id")
+        .agg(F.count("*").alias("total_tx"), F.sum("amount_idr").alias("gmv"), F.sum("is_high_value").alias("fraud_tx"))
+        .orderBy(F.desc("gmv"))
+        .limit(10)
+        .collect()
+    )
+    q2 = (
+        df.groupBy("device", "event_type")
+        .agg(F.count("*").alias("cnt"), F.avg("amount_idr").alias("avg_amt"))
+        .collect()
+    )
+    q3 = (
+        df.filter(F.col("is_high_value") == 1)
+        .groupBy("user_id")
+        .agg(F.count("*").alias("high_val_count"), F.sum("amount_idr").alias("total_amt"))
+        .orderBy(F.desc("total_amt"))
+        .limit(10)
+        .collect()
+    )
+    return len(q1), len(q2), len(q3)
