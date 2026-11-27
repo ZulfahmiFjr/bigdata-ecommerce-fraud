@@ -94,7 +94,67 @@ def main():
     c3.metric("Alert Fraud Terdeteksi", f"{total_fraud:,}")
     c4.metric("Rasio Anomali", f"{anomaly_pct:.2f}%")
 
-    st.info("Kerangka KPI real-time siap, tab grafik menyusul")
+    tab1, tab2, tab3, tab4 = st.tabs([
+        "Monitoring Real-Time & Fraud",
+        "Rekomendasi Aksi Preskriptif",
+        "Data Historis (Parquet Partisi)",
+        "Bukti Optimasi Spark (Benchmark)",
+    ])
+
+    # tab 1 grafik aktivitas streaming sama tabel detail alert fraud
+    with tab1:
+        if not metrics:
+            st.info("Menunggu data streaming pertama dari Kafka & PySpark (sekitar 10-20 detik)...")
+        else:
+            mdf = pd.DataFrame(metrics)
+            mdf["waktu"] = pd.to_datetime(mdf["recorded_at"]).dt.strftime("%H:%M:%S")
+
+            col_l, col_r = st.columns([2, 1])
+            with col_l:
+                st.subheader("Tren Event Masuk vs Deteksi Fraud per Batch")
+                fig_trend = px.line(
+                    mdf,
+                    x="waktu",
+                    y=["total_events", "total_checkouts", "fraud_count"],
+                    markers=True,
+                    labels={"value": "Jumlah", "waktu": "Waktu (UTC)", "variable": "Metrik"},
+                    color_discrete_sequence=["#1E3A5F", "#0F766E", "#DC2626"],
+                )
+                fig_trend.update_layout(height=340, margin=dict(l=10, r=10, t=20, b=10))
+                st.plotly_chart(fig_trend, use_container_width=True)
+
+            with col_r:
+                st.subheader("Distribusi Pola Fraud")
+                if alerts:
+                    adf_pie = pd.DataFrame(alerts)
+                    counts = adf_pie["fraud_type"].value_counts().reset_index()
+                    counts.columns = ["Pola Fraud", "Jumlah"]
+                    fig_pie = px.bar(
+                        counts,
+                        x="Pola Fraud",
+                        y="Jumlah",
+                        color="Pola Fraud",
+                        color_discrete_sequence=["#DC2626", "#D97706", "#1E3A5F"],
+                    )
+                    fig_pie.update_layout(height=340, showlegend=False, margin=dict(l=10, r=10, t=20, b=10))
+                    st.plotly_chart(fig_pie, use_container_width=True)
+                else:
+                    st.info("Belum ada alert fraud sesuai filter.")
+
+            st.subheader("Daftar Alert Fraud Terbaru")
+            if alerts:
+                adf = pd.DataFrame(alerts)
+                cols_show = [c for c in ["detected_at", "fraud_type", "risk_score", "user_id", "merchant_id", "category", "amount_idr", "reason"] if c in adf.columns]
+                st.dataframe(adf[cols_show], use_container_width=True, height=320)
+            else:
+                st.info("Belum ada alert fraud yang tercatat.")
+
+    with tab2:
+        st.info("Panel rekomendasi preskriptif dalam pengerjaan")
+    with tab3:
+        st.info("Tab eksplorasi parquet dalam pengerjaan")
+    with tab4:
+        st.info("Tab benchmark spark dalam pengerjaan")
 
 
 if __name__ == "__main__":
