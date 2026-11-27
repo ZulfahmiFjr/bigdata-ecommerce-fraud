@@ -81,3 +81,27 @@ def connect_producer(bootstrap_servers):
         except Exception as err:
             print(f"[producer] menunggu kafka siap ({err}), coba lagi 3 detik")
             time.sleep(3)
+
+
+def run_producer():
+    bootstrap = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+    topic = os.getenv("KAFKA_TOPIC", "ecommerce_events")
+    rate_per_sec = float(os.getenv("EVENT_RATE_PER_SEC", "6"))
+    sleep_interval = max(0.05, 1.0 / rate_per_sec)
+
+    producer = connect_producer(bootstrap)
+    sent_count = 0
+
+    print(f"[producer] mulai kirim stream ke topik '{topic}' ({rate_per_sec} event/detik)")
+    while True:
+        ev = build_normal_event()
+        producer.send(topic, value=ev)
+        sent_count += 1
+        if sent_count % 60 == 0:
+            producer.flush()
+            print(f"[producer] total event terkirim ke '{topic}': {sent_count}")
+        time.sleep(sleep_interval)
+
+
+if __name__ == "__main__":
+    run_producer()
