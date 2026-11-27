@@ -1,0 +1,13 @@
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# pasang library ringan buat producer, koneksi mongodb, dan baca parquet
+RUN pip install --no-cache-dir \
+    kafka-python-ng==2.2.3 \
+    pymongo==4.10.1 \
+    pandas==2.2.3 \
+    pyarrow==18.1.0
+
+ENV PYTHONUNBUFFERED=1
+ENV PYTHONPATH=/app
