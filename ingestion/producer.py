@@ -1,3 +1,4 @@
+from kafka import KafkaProducer
 import json
 import os
 import random
@@ -63,3 +64,20 @@ def build_normal_event():
     if event_type == "review":
         return make_event("review", user_id, merchant_id, category, review_text=random.choice(NORMAL_REVIEWS), rating=random.choice([4, 5]))
     return make_event(event_type, user_id, merchant_id, category)
+
+
+def connect_producer(bootstrap_servers):
+    # tunggu kafka siap biar ga langsung crash pas container baru start
+    while True:
+        try:
+            producer = KafkaProducer(
+                bootstrap_servers=bootstrap_servers,
+                value_serializer=lambda v: json.dumps(v).encode("utf-8"),
+                linger_ms=50,
+                retries=5,
+            )
+            print(f"[producer] tersambung ke kafka di {bootstrap_servers}")
+            return producer
+        except Exception as err:
+            print(f"[producer] menunggu kafka siap ({err}), coba lagi 3 detik")
+            time.sleep(3)
