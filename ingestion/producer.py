@@ -103,6 +103,11 @@ def run_producer():
             cat = random.choice(["gadget", "elektronik"])
             for _ in range(6):
                 batch_events.append(make_event("checkout", suspect_user, suspect_merchant, cat, amount_idr=random.randint(450_000, 1_800_000), quantity=1))
+        elif cycle % 22 == 0:
+            whale_user = f"usr_high_{random.randint(1, 25)}"
+            merchant = f"mrc_{random.randint(101, 125)}"
+            cat = random.choice(["elektronik", "gadget"])
+            batch_events.append(make_event("checkout", whale_user, merchant, cat, amount_idr=random.randint(11_500_000, 26_000_000), quantity=1))
         else:
             batch_events.append(build_normal_event())
 
