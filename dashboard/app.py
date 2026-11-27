@@ -176,8 +176,30 @@ def main():
                 else:
                     st.info(f"**{title_line}**  \n{body}")
 
+    # tab 3 eksplorasi arsip parquet terpartisi event_date & category
     with tab3:
-        st.info("Tab eksplorasi parquet dalam pengerjaan")
+        st.subheader("Eksplorasi Arsip Historis Parquet Terpartisi")
+        try:
+            dates, cats = list_parquet_partitions(PARQUET_DIR)
+            if not dates:
+                st.info("Folder Parquet terpartisi masih menunggu batch pertama dari Spark.")
+            else:
+                p1, p2 = st.columns(2)
+                sel_date = p1.selectbox("Filter Partisi event_date", ["Semua"] + dates)
+                sel_cat = p2.selectbox("Filter Partisi category", ["Semua"] + cats)
+
+                pdf, total_files = read_partitioned_parquet(PARQUET_DIR, event_date=sel_date, category=sel_cat, max_rows=300)
+                st.caption(f"Struktur partisi aktif: event_date ({len(dates)} tanggal) x category ({len(cats)} kategori) | File partisi cocok: **{total_files:,} file Parquet** | Sampel ditampilkan: **{len(pdf):,} baris**")
+                if not pdf.empty:
+                    if "category" in pdf.columns and "amount_idr" in pdf.columns:
+                        agg = pdf.groupby("category", as_index=False)["amount_idr"].sum()
+                        fig_cat = px.bar(agg, x="category", y="amount_idr", title="Total Nilai Transaksi per Kategori (Sampel Partisi Parquet)", color_discrete_sequence=["#0F766E"])
+                        fig_cat.update_layout(height=300, margin=dict(l=10, r=10, t=40, b=10))
+                        st.plotly_chart(fig_cat, use_container_width=True)
+                    st.dataframe(pdf.head(100), use_container_width=True, height=280)
+        except Exception as err:
+            st.warning(f"Gagal membaca sampel Parquet: {err}")
+
     with tab4:
         st.info("Tab benchmark spark dalam pengerjaan")
 
