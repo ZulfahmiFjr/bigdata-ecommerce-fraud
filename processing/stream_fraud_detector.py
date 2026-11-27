@@ -63,3 +63,12 @@ def process_micro_batch(batch_df, batch_id, parquet_dir, mongo_db):
     )
     # simpen arsip historis ke parquet terpartisi berdasarkan tanggal sama kategori
     enriched.write.mode("append").partitionBy("event_date", "category").parquet(parquet_dir)
+
+    rows = enriched.collect()
+    alerts = []
+    for r in rows:
+        if r["event_type"] == "checkout" and int(r["amount_idr"] or 0) > 10_000_000:
+            alerts.append({"event_id": r["event_id"], "fraud_type": "Nominal Melonjak", "risk_score": 88})
+        elif r["event_type"] == "review" and FRAUD_REVIEW_PATTERN.search(r["review_text"] or ""):
+            alerts.append({"event_id": r["event_id"], "fraud_type": "Ulasan Penipuan", "risk_score": 82})
+    print(f"[spark-stream] batch={batch_id} rows={len(rows)} alerts={len(alerts)}")
