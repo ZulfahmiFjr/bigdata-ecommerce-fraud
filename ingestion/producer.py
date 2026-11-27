@@ -91,12 +91,24 @@ def run_producer():
 
     producer = connect_producer(bootstrap)
     sent_count = 0
+    cycle = 0
 
     print(f"[producer] mulai kirim stream ke topik '{topic}' ({rate_per_sec} event/detik)")
     while True:
-        ev = build_normal_event()
-        producer.send(topic, value=ev)
-        sent_count += 1
+        cycle += 1
+        batch_events = []
+        if cycle % 35 == 0:
+            suspect_user = f"usr_burst_{random.randint(1, 15)}"
+            suspect_merchant = f"mrc_{random.randint(101, 115)}"
+            cat = random.choice(["gadget", "elektronik"])
+            for _ in range(6):
+                batch_events.append(make_event("checkout", suspect_user, suspect_merchant, cat, amount_idr=random.randint(450_000, 1_800_000), quantity=1))
+        else:
+            batch_events.append(build_normal_event())
+
+        for ev in batch_events:
+            producer.send(topic, value=ev)
+            sent_count += 1
         if sent_count % 60 == 0:
             producer.flush()
             print(f"[producer] total event terkirim ke '{topic}': {sent_count}")
