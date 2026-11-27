@@ -43,10 +43,8 @@ def load_benchmark_data(db):
 
 def format_idr(val):
     num = float(val or 0)
-    if num >= 1_000_000_000:
-        return f"Rp{num / 1_000_000_000:.2f} M".replace(".", ",")
-    if num >= 1_000_000:
-        return f"Rp{num / 1_000_000:.1f} Jt".replace(".", ",")
+    if num < 0:
+        return "Rp0"
     return f"Rp{int(num):,}".replace(",", ".")
 
 
@@ -200,8 +198,61 @@ def main():
         except Exception as err:
             st.warning(f"Gagal membaca sampel Parquet: {err}")
 
+    # tab 4 bukti nyata optimasi spark (sebelum vs sesudah partisi + caching)
     with tab4:
-        st.info("Tab benchmark spark dalam pengerjaan")
+        st.subheader("Bukti Performa Optimasi Apache Spark")
+        if not benchmark:
+            st.info("Belum ada data benchmark. Jalankan bash scripts/run_benchmark.sh untuk menguji perbandingan 1 juta baris.")
+        else:
+            base = benchmark["baseline"]
+            opt = benchmark["optimized"]
+
+            b1, b2, b3, b4 = st.columns(4)
+            b1.metric("Jumlah Data Uji", f"{benchmark['dataset_rows']:,} baris")
+            b2.metric("Waktu Baseline", f"{base['query_time_sec']} dtk")
+            b3.metric("Waktu Optimized", f"{opt['query_time_sec']} dtk", delta=f"-{benchmark['time_saved_pct']}%")
+            b4.metric("Percepatan (Speedup)", f"{benchmark['speedup_x']}x lebih cepat")
+
+            col_t, col_s = st.columns(2)
+            with col_t:
+                time_df = pd.DataFrame([
+                    {"Skenario": "Sebelum Optimasi\n(JSON, shuffle=200)", "Waktu (detik)": base["query_time_sec"]},
+                    {"Skenario": "Sesudah Optimasi\n(Parquet Partisi, shuffle=4, cache)", "Waktu (detik)": opt["query_time_sec"]},
+                ])
+                fig_t = px.bar(
+                    time_df,
+                    x="Skenario",
+                    y="Waktu (detik)",
+                    text="Waktu (detik)",
+                    title="Perbandingan Waktu Eksekusi Query",
+                    color="Skenario",
+                    color_discrete_sequence=["#DC2626", "#0F766E"],
+                )
+                fig_t.update_layout(showlegend=False, height=340)
+                st.plotly_chart(fig_t, use_container_width=True)
+
+            with col_s:
+                size_df = pd.DataFrame([
+                    {"Format": "Raw JSON Tanpa Partisi", "Ukuran Disk (MB)": base["storage_mb"]},
+                    {"Format": "Parquet Snappy Terpartisi", "Ukuran Disk (MB)": opt["storage_mb"]},
+                ])
+                fig_s = px.bar(
+                    size_df,
+                    x="Format",
+                    y="Ukuran Disk (MB)",
+                    text="Ukuran Disk (MB)",
+                    title=f"Perbandingan Ukuran Penyimpanan (Hemat {benchmark['storage_saved_pct']}%)",
+                    color="Format",
+                    color_discrete_sequence=["#D97706", "#1E3A5F"],
+                )
+                fig_s.update_layout(showlegend=False, height=340)
+                st.plotly_chart(fig_s, use_container_width=True)
+
+            st.caption(f"Query uji: {benchmark['filter_query']} | Waktu uji: {benchmark['run_at']}")
+
+    if auto_refresh:
+        time.sleep(10)
+        st.rerun()
 
 
 if __name__ == "__main__":
