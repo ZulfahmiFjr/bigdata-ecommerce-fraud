@@ -43,8 +43,10 @@ def load_benchmark_data(db):
 
 def format_idr(val):
     num = float(val or 0)
-    if num < 0:
-        return "Rp0"
+    if num >= 1_000_000_000:
+        return f"Rp{num / 1_000_000_000:.2f} M".replace(".", ",")
+    if num >= 1_000_000:
+        return f"Rp{num / 1_000_000:.1f} Jt".replace(".", ",")
     return f"Rp{int(num):,}".replace(",", ".")
 
 
