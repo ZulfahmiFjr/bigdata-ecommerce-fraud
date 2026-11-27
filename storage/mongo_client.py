@@ -18,3 +18,43 @@ def ensure_indexes(db):
     db.fraud_alerts.create_index([("fraud_type", 1)])
     db.prescriptive_actions.create_index([("created_at", DESCENDING)])
     db.benchmark_results.create_index([("run_at", DESCENDING)])
+
+
+def save_realtime_metrics(db, metric_doc):
+    # simpen ringkasan metrik per micro-batch ke koleksi realtime_metrics
+    doc = dict(metric_doc)
+    doc.setdefault("recorded_at", datetime.now(timezone.utc).isoformat())
+    db.realtime_metrics.insert_one(doc)
+
+
+def save_fraud_alerts(db, alerts):
+    # simpen daftar alert fraud kalo ada yg ketangkep di batch sekarang
+    if not alerts:
+        return
+    now_iso = datetime.now(timezone.utc).isoformat()
+    docs = []
+    for item in alerts:
+        d = dict(item)
+        d.setdefault("detected_at", now_iso)
+        docs.append(d)
+    db.fraud_alerts.insert_many(docs)
+
+
+def save_prescriptive_actions(db, actions):
+    # simpen rekomendasi aksi preskriptif biar langsung muncul di panel dashboard
+    if not actions:
+        return
+    now_iso = datetime.now(timezone.utc).isoformat()
+    docs = []
+    for item in actions:
+        d = dict(item)
+        d.setdefault("created_at", now_iso)
+        docs.append(d)
+    db.prescriptive_actions.insert_many(docs)
+
+
+def save_benchmark_result(db, result_doc):
+    # simpen hasil perbandingan waktu eksekusi spark sebelum vs sesudah optimasi
+    doc = dict(result_doc)
+    doc.setdefault("run_at", datetime.now(timezone.utc).isoformat())
+    db.benchmark_results.insert_one(doc)
