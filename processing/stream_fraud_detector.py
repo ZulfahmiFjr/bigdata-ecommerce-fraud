@@ -211,3 +211,50 @@ def process_micro_batch(batch_df, batch_id, parquet_dir, mongo_db):
     save_fraud_alerts(mongo_db, alerts)
     save_prescriptive_actions(mongo_db, actions)
     print(f"[spark-stream] batch={batch_id} events={total_events} gmv=Rp{total_gmv:,} fraud={len(alerts)} actions={len(actions)}")
+
+
+def main():
+    kafka_bootstrap = os.getenv("KAFKA_BOOTSTRAP", "kafka:9092")
+    kafka_topic = os.getenv("KAFKA_TOPIC", "ecommerce_events")
+    parquet_dir = os.getenv("PARQUET_DIR", "/app/data/parquet/events")
+    checkpoint_dir = os.getenv("CHECKPOINT_DIR", "/app/data/checkpoints/stream_fraud")
+
+    os.makedirs(parquet_dir, exist_ok=True)
+    os.makedirs(checkpoint_dir, exist_ok=True)
+
+    mongo_db = get_mongo_db()
+    ensure_indexes(mongo_db)
+
+    spark = build_spark_session()
+    schema = build_event_schema()
+
+    raw_stream = (
+        spark.readStream
+        .format("kafka")
+        .option("kafka.bootstrap.servers", kafka_bootstrap)
+        .option("subscribe", kafka_topic)
+        .option("startingOffsets", "latest")
+        .option("failOnDataLoss", "false")
+        .load()
+    )
+
+    parsed_stream = (
+        raw_stream
+        .select(F.from_json(F.col("value").cast("string"), schema).alias("data"))
+        .select("data.*")
+        .filter(F.col("event_id").isNotNull())
+    )
+
+    print(f"[spark-stream] mulai dengerin topik kafka '{kafka_topic}' di {kafka_bootstrap}")
+    query = (
+        parsed_stream.writeStream
+        .foreachBatch(lambda df, bid: process_micro_batch(df, bid, parquet_dir, mongo_db))
+        .option("checkpointLocation", checkpoint_dir)
+        .trigger(processingTime="10 seconds")
+        .start()
+    )
+    query.awaitTermination()
+
+
+if __name__ == "__main__":
+    main()
